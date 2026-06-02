@@ -53,11 +53,23 @@ const RISK_COLOR = { high: '#EF4444', medium: '#F59E0B', low: '#22C55E' };
 const MOD_COLOR = { '智能问数': '#EF4444', '营销助手': '#F59E0B', '营销策略': '#3B82F6', '基础后台': '#8B5CF6' };
 
 /* ===== Hero Slide ===== */
-function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature }) {
+function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdatePlan }) {
     const [editingTask, setEditingTask] = useState(null);
     const [popoverPos, setPopoverPos] = useState({ x: 0, y: 0 });
     const [editingRisk, setEditingRisk] = useState(null);
     const [collapsedPhases, setCollapsedPhases] = useState({});
+    const [editingFeature, setEditingFeature] = useState(null);
+
+    // Render [[text|#color]] markup
+    const renderHL = (text) => {
+        if (!text) return '';
+        const parts = text.split(/(\[\[.*?\|.*?\]\])/g);
+        return parts.map((part, pi) => {
+            const m = part.match(/^\[\[(.*?)\|(.*?)\]\]$/);
+            if (m) return <span key={pi} style={{ background: m[2] + '30', color: m[2], fontWeight: 600, padding: '0 2px', borderRadius: 2 }}>{m[1]}</span>;
+            return part;
+        });
+    };
     const coreFeatures = plan.coreFeatures || [];
     const baseInfra = plan.baseInfra || [];
     const phaseFeatures = plan.phaseFeatures || null;
@@ -115,6 +127,19 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature }) {
 
     const findTaskIdx = (name) => allGantt.findIndex(t => t.name === name);
 
+    // Update a coreFeature field
+    const updateCoreFeature = (cfIdx, field, value) => {
+        const newCF = coreFeatures.map((cf, i) => i === cfIdx ? { ...cf, [field]: value } : cf);
+        onUpdatePlan({ coreFeatures: newCF });
+    };
+    const addCoreFeature = () => {
+        const newCF = [...coreFeatures, { name: '新功能模块', desc: '点击编辑描述', module: '智能问数', featureIds: [], ourWork: '待定', clientWork: '待定', jointWork: '待定' }];
+        onUpdatePlan({ coreFeatures: newCF });
+    };
+    const removeCoreFeature = (cfIdx) => {
+        onUpdatePlan({ coreFeatures: coreFeatures.filter((_, i) => i !== cfIdx) });
+    };
+
     // Shared task bar renderer
     const renderTaskBar = (t, ti, left, width, row, idx, isEditing, startLabel, color) => (
         <div key={ti}
@@ -146,7 +171,7 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature }) {
             onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setPopoverPos({ x: Math.min(rect.left, window.innerWidth - 240), y: rect.bottom + 4 });
-                setEditingTask(isEditing ? null : t.name);
+                setEditingTask(editingTask === idx ? null : idx);
             }}
         >
             <div style={{
@@ -233,18 +258,21 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature }) {
                         return (
                             <div key={i} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: i < coreFeatures.length - 1 ? '1px solid #E5E7EB' : 'none' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{cf.name}</span>
-                                    {days > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#6366F1', background: '#EEF2FF', padding: '1px 6px', borderRadius: 3 }}>{days + '天'}</span>}
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', cursor: 'pointer' }} onClick={() => setEditingFeature(i)}>{cf.name}</span>
+                                    {days > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: '#6366F1', background: '#EEF2FF', padding: '1px 6px', borderRadius: 3 }}>{days + '\u5929'}</span>}
+                                    <button onClick={() => setEditingFeature(i)} style={{ marginLeft: 'auto', fontSize: 9, padding: '1px 6px', border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', color: '#6B7280' }}>{'\u7f16\u8f91'}</button>
                                 </div>
-                                <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.5, marginBottom: 6 }}>{cf.desc}</div>
+                                <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.5, marginBottom: 6 }}>{renderHL(cf.desc)}</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 10 }}>
-                                    <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#6366F1' }}>我方</span> {cf.ourWork}</div>
-                                    <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#D97706' }}>客户</span> {cf.clientWork}</div>
+                                    <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#6366F1' }}>{'\u6211\u65b9'}</span> {cf.ourWork}</div>
+                                    <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#D97706' }}>{'\u5ba2\u6237'}</span> {cf.clientWork}</div>
                                 </div>
                             </div>
                         );
                     })}
+                    {!isMultiPhase && (
+                        <button onClick={addCoreFeature} style={{ width: '100%', padding: '6px 0', border: '1px dashed #D1D5DB', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 11, color: '#6B7280', marginBottom: 12 }}>{"+ \u6dfb\u52a0\u529f\u80fd\u6a21\u5757"}</button>
+                    )}
 
                     {/* Base infra (plan-a only) */}
                     {!isMultiPhase && baseInfra && baseInfra.length > 0 && (
@@ -350,7 +378,7 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature }) {
                                             const left = ((s - minDate) / range) * 100;
                                             const width = Math.max(5, (t.days * 86400000 / range) * 100);
                                             const idx = findTaskIdx(t.name);
-                                            const isEditing = editingTask === t.name;
+                                            const isEditing = editingTask === idx;
                                             const sd = new Date(t.start);
                                             const startLabel = (sd.getMonth() + 1) + '/' + sd.getDate();
                                             return renderTaskBar(t, ti, left, width, ti, idx, isEditing, startLabel, color);
@@ -397,10 +425,10 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature }) {
             </div>
 
             {/* Fixed popover */}
-            {editingTask && (() => {
-                const t = displayTasks.find(x => x.name === editingTask);
+            {editingTask !== null && (() => {
+                const idx = editingTask;
+                const t = allGantt[idx];
                 if (!t) return null;
-                const idx = findTaskIdx(t.name);
                 return (
                     <>
                         <div onClick={() => setEditingTask(null)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
@@ -435,6 +463,79 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature }) {
                             </div>
                         </div>
                     </>
+                );
+            })()}
+
+            {/* Feature edit modal */}
+            {editingFeature !== null && !isMultiPhase && (() => {
+                const cf = coreFeatures[editingFeature];
+                if (!cf) return null;
+                const modules = Object.keys(MOD_COLOR);
+                const HIGHLIGHT_COLORS = ['#EF4444', '#F59E0B', '#3B82F6', '#22C55E', '#8B5CF6'];
+                const renderHighlightedText = (text) => {
+                    if (!text) return '';
+                    const parts = text.split(/(\[\[.*?\|.*?\]\])/g);
+                    return parts.map((part, pi) => {
+                        const match = part.match(/^\[\[(.*?)\|(.*?)\]\]$/);
+                        if (match) return <span key={pi} style={{ background: match[2] + '30', color: match[2], fontWeight: 600, padding: '0 2px', borderRadius: 2 }}>{match[1]}</span>;
+                        return part;
+                    });
+                };
+                return (
+                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditingFeature(null)}>
+                        <div style={{ background: '#fff', borderRadius: 10, padding: 20, width: 520, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <span style={{ fontSize: 15, fontWeight: 700 }}>{"\u7f16\u8f91\u529f\u80fd\u6a21\u5757"}</span>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <button onClick={() => { removeCoreFeature(editingFeature); setEditingFeature(null); }} style={{ fontSize: 11, padding: '4px 10px', border: '1px solid #FECACA', borderRadius: 4, background: '#FEF2F2', cursor: 'pointer', color: '#DC2626' }}>{"\u5220\u9664"}</button>
+                                    <button onClick={() => setEditingFeature(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#6B7280' }}>&times;</button>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
+                                    {"\u540d\u79f0"}
+                                    <input value={cf.name} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, marginTop: 2 }}
+                                        onChange={e => updateCoreFeature(editingFeature, 'name', e.target.value)} />
+                                </label>
+                                <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
+                                    {"\u6a21\u5757"}
+                                    <select value={cf.module} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, marginTop: 2 }}
+                                        onChange={e => updateCoreFeature(editingFeature, 'module', e.target.value)}>
+                                        {modules.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </label>
+                                <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
+                                    {"\u63cf\u8ff0"}
+                                    <textarea value={cf.desc} rows={3} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, marginTop: 2, resize: 'vertical' }}
+                                        onChange={e => updateCoreFeature(editingFeature, 'desc', e.target.value)} />
+                                </label>
+                                <div style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 10, color: '#6B7280' }}>
+                                    {"\u6807\u8272\u683c\u5f0f: [[text|#color]]  \u4f8b\u5982 [[\u5fae\u8f6f\u4ec5\u96c6\u6210|#EF4444]]"}
+                                </div>
+                                <div style={{ fontSize: 11, padding: '6px 8px', background: '#FAFAFA', borderRadius: 4, lineHeight: 1.6 }}>
+                                    {"\u9884\u89c8: "}{renderHighlightedText(cf.desc)}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
+                                        {"\u6211\u65b9\u5de5\u4f5c"}
+                                        <textarea value={cf.ourWork} rows={2} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 11, marginTop: 2, resize: 'vertical' }}
+                                            onChange={e => updateCoreFeature(editingFeature, 'ourWork', e.target.value)} />
+                                    </label>
+                                    <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
+                                        {"\u5ba2\u6237\u5de5\u4f5c"}
+                                        <textarea value={cf.clientWork} rows={2} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 11, marginTop: 2, resize: 'vertical' }}
+                                            onChange={e => updateCoreFeature(editingFeature, 'clientWork', e.target.value)} />
+                                    </label>
+                                </div>
+                                <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
+                                    {"\u8054\u5408\u5de5\u4f5c"}
+                                    <input value={cf.jointWork || ''} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, marginTop: 2 }}
+                                        onChange={e => updateCoreFeature(editingFeature, 'jointWork', e.target.value)} />
+                                </label>
+                            </div>
+                            <button onClick={() => setEditingFeature(null)} style={{ marginTop: 12, width: '100%', background: '#6366F1', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>{"\u5b8c\u6210"}</button>
+                        </div>
+                    </div>
                 );
             })()}
         </div>
@@ -501,7 +602,7 @@ export default function PlanDesign() {
                 <div>
                     {/* Hero Slide */}
                     {(plan.coreFeatures || plan.phaseFeatures) && (
-                        <PlanHeroSlide plan={plan} features={features} onUpdateTask={updateTask} onUpdateFeature={updateFeature} />
+                        <PlanHeroSlide plan={plan} features={features} onUpdateTask={updateTask} onUpdateFeature={updateFeature} onUpdatePlan={(changes) => updatePlan(plan.id, changes)} />
                     )}
 
                     {/* Phases */}
