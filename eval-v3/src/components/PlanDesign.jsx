@@ -60,16 +60,6 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
     const [collapsedPhases, setCollapsedPhases] = useState({});
     const [editingFeature, setEditingFeature] = useState(null);
 
-    // Render [[text|#color]] markup
-    const renderHL = (text) => {
-        if (!text) return '';
-        const parts = text.split(/(\[\[.*?\|.*?\]\])/g);
-        return parts.map((part, pi) => {
-            const m = part.match(/^\[\[(.*?)\|(.*?)\]\]$/);
-            if (m) return <span key={pi} style={{ background: m[2] + '30', color: m[2], fontWeight: 600, padding: '0 2px', borderRadius: 2 }}>{m[1]}</span>;
-            return part;
-        });
-    };
     const coreFeatures = plan.coreFeatures || [];
     const baseInfra = plan.baseInfra || [];
     const phaseFeatures = plan.phaseFeatures || null;
@@ -262,7 +252,7 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
                                     {days > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: '#6366F1', background: '#EEF2FF', padding: '1px 6px', borderRadius: 3 }}>{days + '\u5929'}</span>}
                                     <button onClick={() => setEditingFeature(i)} style={{ marginLeft: 'auto', fontSize: 9, padding: '1px 6px', border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', color: '#6B7280' }}>{'\u7f16\u8f91'}</button>
                                 </div>
-                                <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.5, marginBottom: 6 }}>{renderHL(cf.desc)}</div>
+                                <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.5, marginBottom: 6 }} dangerouslySetInnerHTML={{ __html: cf.desc }} />
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 10 }}>
                                     <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#6366F1' }}>{'\u6211\u65b9'}</span> {cf.ourWork}</div>
                                     <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#D97706' }}>{'\u5ba2\u6237'}</span> {cf.clientWork}</div>
@@ -472,15 +462,7 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
                 if (!cf) return null;
                 const modules = Object.keys(MOD_COLOR);
                 const HIGHLIGHT_COLORS = ['#EF4444', '#F59E0B', '#3B82F6', '#22C55E', '#8B5CF6'];
-                const renderHighlightedText = (text) => {
-                    if (!text) return '';
-                    const parts = text.split(/(\[\[.*?\|.*?\]\])/g);
-                    return parts.map((part, pi) => {
-                        const match = part.match(/^\[\[(.*?)\|(.*?)\]\]$/);
-                        if (match) return <span key={pi} style={{ background: match[2] + '30', color: match[2], fontWeight: 600, padding: '0 2px', borderRadius: 2 }}>{match[1]}</span>;
-                        return part;
-                    });
-                };
+                const execCmd = (cmd, val) => { document.execCommand(cmd, false, val); };
                 return (
                     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditingFeature(null)}>
                         <div style={{ background: '#fff', borderRadius: 10, padding: 20, width: 520, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
@@ -504,33 +486,30 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
                                         {modules.map(m => <option key={m} value={m}>{m}</option>)}
                                     </select>
                                 </label>
-                                <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
+                                <div style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
                                     {"\u63cf\u8ff0"}
-                                    <div style={{ display: 'flex', gap: 4, marginTop: 4, marginBottom: 4, alignItems: 'center' }}>
-                                        <span style={{ fontSize: 10, color: '#9CA3AF' }}>{"\u9009\u4e2d\u6587\u5b57\u540e\u70b9\u51fb\u989c\u8272\u6807\u4eae\uff1a"}</span>
+                                    <div style={{ display: 'flex', gap: 3, marginTop: 4, marginBottom: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <button onMouseDown={e => { e.preventDefault(); execCmd('bold'); }} style={{ width: 24, height: 24, border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>B</button>
+                                        <button onMouseDown={e => { e.preventDefault(); execCmd('italic'); }} style={{ width: 24, height: 24, border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', fontStyle: 'italic', fontSize: 12 }}>I</button>
+                                        <button onMouseDown={e => { e.preventDefault(); execCmd('underline'); }} style={{ width: 24, height: 24, border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', textDecoration: 'underline', fontSize: 12 }}>U</button>
+                                        <div style={{ width: 1, height: 16, background: '#E5E7EB', margin: '0 2px' }} />
                                         {HIGHLIGHT_COLORS.map(c => (
-                                            <button key={c} onClick={() => {
-                                                const ta = document.getElementById('cf-desc-textarea');
-                                                if (!ta) return;
-                                                const start = ta.selectionStart;
-                                                const end = ta.selectionEnd;
-                                                if (start === end) return;
-                                                const text = cf.desc;
-                                                const selected = text.slice(start, end);
-                                                const newText = text.slice(0, start) + '[[' + selected + '|' + c + ']]' + text.slice(end);
-                                                updateCoreFeature(editingFeature, 'desc', newText);
-                                            }} style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid ' + c, background: c + '25', cursor: 'pointer', flexShrink: 0 }} />
+                                            <button key={c} onMouseDown={e => { e.preventDefault(); execCmd('foreColor', c); }} style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid ' + c, background: c + '20', cursor: 'pointer', flexShrink: 0 }} title={"\u6587\u5b57\u989c\u8272"} />
                                         ))}
-                                        <button onClick={() => {
-                                            const cleaned = cf.desc.replace(/\[\[(.*?)\|.*?\]\]/g, '$1');
-                                            updateCoreFeature(editingFeature, 'desc', cleaned);
-                                        }} style={{ fontSize: 9, padding: '2px 6px', border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', color: '#9CA3AF', marginLeft: 4 }}>{"\u6e05\u9664\u6807\u8272"}</button>
+                                        <div style={{ width: 1, height: 16, background: '#E5E7EB', margin: '0 2px' }} />
+                                        {HIGHLIGHT_COLORS.map(c => (
+                                            <button key={'bg' + c} onMouseDown={e => { e.preventDefault(); execCmd('hiliteColor', c + '30'); }} style={{ width: 20, height: 20, borderRadius: 3, border: '1px solid ' + c, background: c + '30', cursor: 'pointer', flexShrink: 0, fontSize: 9, lineHeight: '18px', textAlign: 'center' }} title={"\u80cc\u666f\u8272"}>{"A"}</button>
+                                        ))}
+                                        <button onMouseDown={e => { e.preventDefault(); execCmd('removeFormat'); }} style={{ fontSize: 9, padding: '2px 6px', border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', color: '#9CA3AF', marginLeft: 'auto' }}>{"\u6e05\u9664\u683c\u5f0f"}</button>
                                     </div>
-                                    <textarea id="cf-desc-textarea" value={cf.desc} rows={3} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, resize: 'vertical' }}
-                                        onChange={e => updateCoreFeature(editingFeature, 'desc', e.target.value)} />
-                                </label>
-                                <div style={{ fontSize: 11, padding: '6px 8px', background: '#FAFAFA', borderRadius: 4, lineHeight: 1.6 }}>
-                                    {"\u9884\u89c8: "}{renderHighlightedText(cf.desc)}
+                                    <div
+                                        id="cf-desc-editor"
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        dangerouslySetInnerHTML={{ __html: cf.desc }}
+                                        onBlur={e => updateCoreFeature(editingFeature, 'desc', e.currentTarget.innerHTML)}
+                                        style={{ display: 'block', width: '100%', minHeight: 60, border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, lineHeight: 1.6, outline: 'none', background: '#fff' }}
+                                    />
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                     <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
