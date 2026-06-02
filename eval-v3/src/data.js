@@ -294,12 +294,12 @@ const DATA = [
 const PLANS = [
     {
         id: 'plan-a',
-        name: '方案一：三大核心功能 + 基础能力底座',
+        name: '阶段一：三大核心功能 + 基础能力底座',
         tag: '推荐',
         summary: '聚焦 3 个核心业务功能，配套基础能力底座，双方协同开发快速验证价值。',
         strategy: '核心功能：智能问数 + 人群画像洞察 + 自动圈选人群。基础底座：知识库、提示词、解读策略作为支撑同步建设。',
         coreFeatures: [
-            { name: '智能问数（含会员概览）', desc: '自然语言查询会员数据，覆盖会员概览、生命周期等核心指标', module: '智能问数', featureIds: [1, 2, 5], ourWork: 'Copilot Studio Agent 搭建 + NL2SQL 能力集成', clientWork: 'CDP 数据库 schema、字段含义、查询 API', jointWork: '联调查询接口 + 测试准确率' },
+            { name: '智能问数（含会员概览）', desc: '自然语言查询会员数据，覆盖会员概览、生命周期等核心指标。前提条件：微软仅作为集成方，所有自然语言转 SQL 语句由组件处理，微软不进行任何 NL2SQL 处理。', module: '智能问数', featureIds: [1, 2, 5], ourWork: 'Copilot Studio Agent 搭建 + NL2SQL 组件集成（仅集成，不处理）', clientWork: 'CDP 数据库 schema、字段含义、查询 API + NL2SQL 组件', jointWork: '联调查询接口 + 测试准确率' },
             { name: 'AI 人群画像洞察', desc: '语义输入自动识别人群特征，生成画像分析', module: '智能问数', featureIds: [3, 7], ourWork: 'Copilot Studio Agent + AI 特征识别', clientWork: '人群标签体系、画像数据 API', jointWork: '画像准确度验证' },
             { name: '自动圈选人群', desc: '基于标签和行为的对话式人群圈选', module: '营销助手', featureIds: [9, 11], ourWork: 'Copilot Studio 对话式交互 + NLP 解析', clientWork: 'CDP 标签/行为筛选 API', jointWork: '圈人结果验证 + 准确度调优' },
         ],
@@ -330,7 +330,7 @@ const PLANS = [
     },
     {
         id: 'plan-b',
-        name: '方案二：全量功能覆盖 + 分版本交付',
+        name: '阶段二：全量功能覆盖 + 分版本交付',
         tag: null,
         summary: '覆盖全部功能点，按 V1.0 / V2.0 / V2.1 三期交付，对齐客户原始产品路线图。',
         strategy: '三期分批交付：V1.0 打基础（8个功能），V2.0 智能化升级（6个功能），V2.1 深度 AI（5个功能）。',
