@@ -299,7 +299,7 @@ const PLANS = [
         summary: '聚焦 3 个核心业务功能，配套基础能力底座，双方协同开发快速验证价值。',
         strategy: '核心功能：智能问数 + 人群画像洞察 + 自动圈选人群。基础底座：知识库、提示词、解读策略作为支撑同步建设。',
         coreFeatures: [
-            { name: '智能问数（含会员概览）', desc: '自然语言查询会员数据，覆盖会员概览、生命周期等核心指标。前提条件：微软仅作为集成方，所有自然语言转 SQL 语句由组件处理，微软不进行任何 NL2SQL 处理。', module: '智能问数', featureIds: [1, 2, 5], ourWork: 'Copilot Studio Agent 搭建 + NL2SQL 组件集成（仅集成，不处理）', clientWork: 'CDP 数据库 schema、字段含义、查询 API + NL2SQL 组件', jointWork: '联调查询接口 + 测试准确率' },
+            { name: '智能问数（含会员概览）', desc: '自然语言查询会员数据，覆盖会员概览、生命周期等核心指标。<br/><b style=\"color:#EF4444\">【前提条件】</b>NL2SQL（自然语言转SQL）能力由客户侧提供现成组件或第三方服务，微软负责将该组件集成至 Copilot Studio Agent 中完成端到端调用，<b style=\"color:#EF4444\">微软不承担 NL2SQL 引擎的开发与调优工作</b>。', module: '智能问数', featureIds: [1, 2, 5], ourWork: 'Copilot Studio Agent 搭建 + 对接客户提供的 NL2SQL 组件（集成调用，不含引擎开发）', clientWork: '提供 NL2SQL 组件/服务 + CDP 数据库 schema 及字段说明 + 数据查询 API', jointWork: '联调查询接口 + 端到端准确率验证' },
             { name: 'AI 人群画像洞察', desc: '语义输入自动识别人群特征，生成画像分析', module: '智能问数', featureIds: [3, 7], ourWork: 'Copilot Studio Agent + AI 特征识别', clientWork: '人群标签体系、画像数据 API', jointWork: '画像准确度验证' },
             { name: '自动圈选人群', desc: '基于标签和行为的对话式人群圈选', module: '营销助手', featureIds: [9, 11], ourWork: 'Copilot Studio 对话式交互 + NLP 解析', clientWork: 'CDP 标签/行为筛选 API', jointWork: '圈人结果验证 + 准确度调优' },
         ],
@@ -317,7 +317,7 @@ const PLANS = [
         pros: ['聚焦 3 个高价值功能，交付目标清晰', '双方协同分工明确，不互相阻塞', '基础底座同步建设，为后续扩展打基础', '可争取微软技术支持资源'],
         cons: ['营销文案/策略功能延后', '需要客户配合提供 API 和数据字典'],
         ganttTasks: [
-            { section: '核心功能', name: 'NL2SQL POC 验证', start: '2026-06-02', days: 5 },
+            { section: '核心功能', name: 'NL2SQL 集成验证（调用客户组件）', start: '2026-06-02', days: 5 },
             { section: '核心功能', name: '智能问数一期', start: '2026-06-06', days: 6 },
             { section: '核心功能', name: 'AI 人群画像洞察', start: '2026-06-11', days: 6 },
             { section: '核心功能', name: '自动圈选人群', start: '2026-06-15', days: 6 },
