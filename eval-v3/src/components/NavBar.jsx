@@ -14,14 +14,14 @@ export default function NavBar({ tabs, active, onTabChange, onPresent, onExport,
                 ))}
             </div>
             <div className="navbar-actions">
-                <button className="navbar-action-btn" onClick={onImport} title="\u5bfc\u5165\u6570\u636e">
-                    \u2b06 \u5bfc\u5165
+                <button className="navbar-action-btn" onClick={onImport} title="导入数据">
+                    {"⬆ 导入"}
                 </button>
-                <button className="navbar-action-btn" onClick={onExport} title="\u5bfc\u51fa\u6570\u636e">
-                    \u2b07 \u5bfc\u51fa
+                <button className="navbar-action-btn" onClick={onExport} title="导出数据">
+                    {"⬇ 导出"}
                 </button>
                 <button className="navbar-present" onClick={onPresent}>
-                    \u6c47\u62a5\u6a21\u5f0f
+                    {"汇报模式"}
                 </button>
             </div>
         </nav>
