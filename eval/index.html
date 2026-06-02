@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEON CDP+AI 项目评估</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="nav">
+        <div class="nav-brand"><i></i>AEON CDP+AI</div>
+        <div class="nav-tabs">
+            <div class="nav-tab active" onclick="switchView('list')">功能清单</div>
+            <div class="nav-tab" onclick="switchView('risks')">风险与依赖</div>
+            <div class="nav-tab" onclick="switchView('plans')">方案设计</div>
+        </div>
+        <div class="nav-right">
+            <button class="btn" onclick="saveAll()">保存</button>
+            <button class="btn" onclick="loadAll()">恢复</button>
+            <button class="btn" onclick="exportJSON()">导出</button>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- Summary -->
+        <div class="summary-strip">
+            <div class="summary-item">
+                <div class="summary-label">功能项</div>
+                <div class="summary-val" id="s-total">0</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">V1.0 范围</div>
+                <div class="summary-val" id="s-v1">0</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">V1.0 总人天</div>
+                <div class="summary-val c-primary" id="s-effort">—</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">高风险项</div>
+                <div class="summary-val c-danger" id="s-risk">0</div>
+            </div>
+        </div>
+
+        <!-- ===== LIST VIEW ===== -->
+        <div class="view active" id="view-list">
+            <table class="ltable" id="mainTable">
+                <thead>
+                    <tr>
+                        <th style="width:24px"></th>
+                        <th class="sortable filterable" data-col="name">
+                            功能名称
+                            <div class="col-filter" id="filter-name"></div>
+                        </th>
+                        <th class="sortable filterable" data-col="module">
+                            模块
+                            <div class="col-filter" id="filter-module"></div>
+                        </th>
+                        <th class="sortable filterable" data-col="priority">
+                            优先级
+                            <div class="col-filter" id="filter-priority"></div>
+                        </th>
+                        <th class="sortable filterable" data-col="version">
+                            版本
+                            <div class="col-filter" id="filter-version"></div>
+                        </th>
+                        <th class="sortable filterable" data-col="risk">
+                            风险
+                            <div class="col-filter" id="filter-risk"></div>
+                        </th>
+                        <th style="text-align:center">人天</th>
+                        <th class="filterable" data-col="status">
+                            状态
+                            <div class="col-filter" id="filter-status"></div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            <div class="add-row" onclick="addRow()">+ 添加功能项</div>
+        </div>
+
+        <!-- ===== RISK VIEW ===== -->
+        <div class="view" id="view-risks">
+            <div class="panel">
+                <div class="panel-header">风险 x 模块影响矩阵</div>
+                <div class="panel-body" style="padding:0">
+                    <table class="rtable">
+                        <thead>
+                            <tr>
+                                <th>风险项</th>
+                                <th>等级</th>
+                                <th style="text-align:center">智能问数</th>
+                                <th style="text-align:center">营销助手</th>
+                                <th style="text-align:center">营销策略</th>
+                                <th style="text-align:center">基础后台</th>
+                                <th style="text-align:center">版本</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><b>NL2SQL 准确率</b></td>
+                                <td><span class="tag t-red">高</span></td>
+                                <td class="rm-h">直接</td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-m">间接</td>
+                                <td style="text-align:center"><span class="tag t-gray">V1.0</span></td>
+                            </tr>
+                            <tr>
+                                <td><b>CDP API 开放度</b></td>
+                                <td><span class="tag t-red">高</span></td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-h">直接</td>
+                                <td class="rm-h">直接</td>
+                                <td class="rm-n">—</td>
+                                <td style="text-align:center"><span class="tag t-gray">V2.0</span></td>
+                            </tr>
+                            <tr>
+                                <td><b>数据权限行级过滤</b></td>
+                                <td><span class="tag t-amber">中</span></td>
+                                <td class="rm-m">直接</td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-m">直接</td>
+                                <td style="text-align:center"><span class="tag t-gray">V1.0</span></td>
+                            </tr>
+                            <tr>
+                                <td><b>多轮对话上下文</b></td>
+                                <td><span class="tag t-amber">中</span></td>
+                                <td class="rm-m">直接</td>
+                                <td class="rm-m">间接</td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-n">—</td>
+                                <td style="text-align:center"><span class="tag t-gray">V1.0</span></td>
+                            </tr>
+                            <tr>
+                                <td><b>Copilot Studio 计费</b></td>
+                                <td><span class="tag t-amber">中</span></td>
+                                <td class="rm-m">*</td>
+                                <td class="rm-m">*</td>
+                                <td class="rm-m">*</td>
+                                <td class="rm-m">*</td>
+                                <td style="text-align:center"><span class="tag t-gray">全版本</span></td>
+                            </tr>
+                            <tr>
+                                <td><b>基础设施阻塞</b></td>
+                                <td><span class="tag t-amber">中</span></td>
+                                <td class="rm-m">被阻塞</td>
+                                <td class="rm-m">被阻塞</td>
+                                <td class="rm-m">被阻塞</td>
+                                <td class="rm-h">源头</td>
+                                <td style="text-align:center"><span class="tag t-gray">V1.0</span></td>
+                            </tr>
+                            <tr>
+                                <td><b>模板对接 CDP</b></td>
+                                <td><span class="tag t-amber">中</span></td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-m">直接</td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-n">—</td>
+                                <td style="text-align:center"><span class="tag t-gray">V1.0</span></td>
+                            </tr>
+                            <tr>
+                                <td><b>图片生成质量</b></td>
+                                <td><span class="tag t-green">低</span></td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-l">低</td>
+                                <td class="rm-n">—</td>
+                                <td class="rm-n">—</td>
+                                <td style="text-align:center"><span class="tag t-gray">V2.1</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel" style="margin-top:16px">
+                <div class="panel-header">关键依赖项</div>
+                <div class="panel-body" style="padding:0">
+                    <table class="rtable">
+                        <thead>
+                            <tr>
+                                <th>依赖项</th>
+                                <th>负责方</th>
+                                <th>说明</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Azure OpenAI 服务</td>
+                                <td>IT / Azure</td>
+                                <td>GPT-4o 模型部署</td>
+                                <td><input class="cell-input" style="width:80px" data-field="dep-azure" value="待确认">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Copilot Studio 许可</td>
+                                <td>IT / 采购</td>
+                                <td>消息包额度</td>
+                                <td><input class="cell-input" style="width:80px" data-field="dep-copilot" value="待确认">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>CDP API 文档</td>
+                                <td>CDP 厂商</td>
+                                <td>画布/圈人/查询</td>
+                                <td><input class="cell-input" style="width:80px" data-field="dep-api" value="待获取"></td>
+                            </tr>
+                            <tr>
+                                <td>Dataverse 环境</td>
+                                <td>IT</td>
+                                <td>配置/知识库/策略</td>
+                                <td><input class="cell-input" style="width:80px" data-field="dep-dv" value="待确认"></td>
+                            </tr>
+                            <tr>
+                                <td>CDP 数据字典</td>
+                                <td>业务 / CDP</td>
+                                <td>NL2SQL 上下文</td>
+                                <td><input class="cell-input" style="width:80px" data-field="dep-dict" value="待获取"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== PLANS VIEW ===== -->
+        <div class="view" id="view-plans"></div>
+
+    </div>
+
+    <!-- Detail Side Panel (overlay) -->
+    <div class="side-panel" id="sidePanel">
+        <div class="sp-header">
+            <div class="sp-title" id="spTitle" contenteditable="true"></div>
+            <button class="sp-close" onclick="closeSidePanel()">&times;</button>
+        </div>
+        <div class="sp-body" id="spBody"></div>
+    </div>
+    <div class="sp-overlay" id="spOverlay" onclick="closeSidePanel()"></div>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

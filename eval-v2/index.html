@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEON CDP+AI 项目评估 v2</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="nav">
+        <div class="nav-brand"><i></i>AEON CDP+AI</div>
+        <div class="nav-tabs">
+            <div class="nav-tab active" data-view="dashboard">仪表盘</div>
+            <div class="nav-tab" data-view="list">功能清单</div>
+            <div class="nav-tab" data-view="matrix">影响-工作量矩阵</div>
+            <div class="nav-tab" data-view="deps">依赖图谱</div>
+            <div class="nav-tab" data-view="cost">成本视图</div>
+            <div class="nav-tab" data-view="plans">方案设计</div>
+        </div>
+        <div class="nav-right">
+            <button class="btn" id="btnPresent">演示模式</button>
+            <button class="btn" onclick="saveAll()">保存</button>
+            <button class="btn" onclick="loadAll()">恢复</button>
+            <button class="btn" onclick="exportJSON()">导出</button>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- ===== DASHBOARD VIEW ===== -->
+        <div class="view active" id="view-dashboard">
+            <div class="dash-grid">
+                <div class="dash-card">
+                    <div class="dash-card-label">范围</div>
+                    <div class="dash-card-val" id="dc-total">0</div>
+                    <div class="dash-card-sub" id="dc-scope-sub"></div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-card-label">时间线</div>
+                    <div class="dash-card-val" id="dc-phase">--</div>
+                    <div class="dash-card-sub" id="dc-phase-sub"></div>
+                </div>
+                <div class="dash-card risk">
+                    <div class="dash-card-label">风险</div>
+                    <div class="dash-card-val" id="dc-risk"></div>
+                    <div class="dash-card-sub" id="dc-risk-sub"></div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-card-label">预算</div>
+                    <div class="dash-card-val" id="dc-budget">--</div>
+                    <div class="dash-card-sub" id="dc-budget-sub"></div>
+                </div>
+            </div>
+            <div class="dash-row">
+                <div class="dash-section">
+                    <div class="dash-section-title">待决策项</div>
+                    <div id="dash-pending"></div>
+                </div>
+                <div class="dash-section">
+                    <div class="dash-section-title">Top 3 风险</div>
+                    <div id="dash-risks"></div>
+                </div>
+            </div>
+            <div class="dash-section" style="margin-bottom:16px">
+                <div class="dash-section-title">依赖状态</div>
+                <div id="dash-deps"></div>
+            </div>
+        </div>
+
+        <!-- ===== LIST VIEW ===== -->
+        <div class="view" id="view-list">
+            <table class="ltable" id="mainTable">
+                <thead>
+                    <tr>
+                        <th style="width:24px"></th>
+                        <th class="filterable" data-col="name">功能名称<div class="col-filter" id="filter-name"></div>
+                        </th>
+                        <th class="filterable" data-col="module">模块<div class="col-filter" id="filter-module"></div>
+                        </th>
+                        <th class="filterable" data-col="priority">优先级<div class="col-filter" id="filter-priority">
+                            </div>
+                        </th>
+                        <th class="filterable" data-col="version">版本<div class="col-filter" id="filter-version"></div>
+                        </th>
+                        <th class="filterable" data-col="risk">风险<div class="col-filter" id="filter-risk"></div>
+                        </th>
+                        <th style="text-align:center">影响</th>
+                        <th style="text-align:center">人天</th>
+                        <th class="filterable" data-col="status">状态<div class="col-filter" id="filter-status"></div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            <div class="add-row" onclick="addRow()">+ 添加功能项</div>
+        </div>
+
+        <!-- ===== MATRIX VIEW ===== -->
+        <div class="view" id="view-matrix">
+            <div class="chart-wrapper">
+                <canvas class="chart-canvas" id="matrixCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- ===== DEPENDENCY VIEW ===== -->
+        <div class="view" id="view-deps">
+            <div class="dep-graph-container">
+                <div class="dash-section-title">功能依赖图谱</div>
+                <div class="diagram-container" style="min-height:300px">
+                    <div class="mermaid" id="depGraph"></div>
+                </div>
+                <div class="dep-editor">
+                    <div class="dep-editor-col">
+                        <h4>添加依赖</h4>
+                        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+                            <select class="dep-select" id="depFrom" style="flex:1"></select>
+                            <span style="color:var(--text-3)">--&gt;</span>
+                            <select class="dep-select" id="depTo" style="flex:1"></select>
+                            <button class="btn btn-primary" onclick="addDependency()">添加</button>
+                        </div>
+                    </div>
+                    <div class="dep-editor-col">
+                        <h4>当前依赖列表</h4>
+                        <div id="depListEditor"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== COST VIEW ===== -->
+        <div class="view" id="view-cost">
+            <div class="cost-summary" id="costSummaryCards"></div>
+            <div class="panel">
+                <div class="panel-header">成本明细</div>
+                <div class="panel-body" style="padding:0;overflow-x:auto">
+                    <table class="cost-table" id="costTable">
+                        <thead>
+                            <tr>
+                                <th>功能名称</th>
+                                <th>模块</th>
+                                <th>版本</th>
+                                <th style="text-align:right">人天</th>
+                                <th style="text-align:right">月运营成本 (USD)</th>
+                                <th>成本说明</th>
+                            </tr>
+                        </thead>
+                        <tbody id="costTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== PLANS VIEW ===== -->
+        <div class="view" id="view-plans"></div>
+
+    </div>
+
+    <!-- Side Panel -->
+    <div class="side-panel" id="sidePanel">
+        <div class="sp-header">
+            <div class="sp-title" id="spTitle" contenteditable="true"></div>
+            <button class="sp-close" onclick="closeSidePanel()">&times;</button>
+        </div>
+        <div class="sp-body" id="spBody"></div>
+    </div>
+    <div class="sp-overlay" id="spOverlay" onclick="closeSidePanel()"></div>
+
+    <!-- Presentation Overlay -->
+    <div id="presentationOverlay"></div>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

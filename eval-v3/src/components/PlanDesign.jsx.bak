@@ -1,0 +1,760 @@
+import { useState } from 'react';
+import ReactECharts from 'echarts-for-react';
+import { useStore } from '../store';
+
+function buildGanttOption(tasks) {
+    if (!tasks || tasks.length === 0) return null;
+    const sections = [...new Set(tasks.map(t => t.section))];
+    const items = [];
+    tasks.forEach((t) => {
+        const start = new Date(t.start).getTime();
+        const end = start + (t.days || 1) * 86400000;
+        items.push({
+            name: t.name,
+            value: [sections.indexOf(t.section), start, end, t.days],
+            itemStyle: {
+                color: t.milestone ? '#F59E0B' : ['#6366F1', '#8B5CF6', '#3B82F6', '#22C55E', '#F59E0B'][sections.indexOf(t.section) % 5],
+            },
+        });
+    });
+    return {
+        tooltip: { formatter: (p) => `${p.data.name}<br/>${new Date(p.data.value[1]).toLocaleDateString()} ~ ${new Date(p.data.value[2]).toLocaleDateString()}<br/>${p.data.value[3]} 澶ー },
+        grid: { left: 120, right: 30, top: 20, bottom: 30 },
+        xAxis: { type: 'time', axisLabel: { fontSize: 11 } },
+        yAxis: { type: 'category', data: sections, inverse: true, axisLabel: { fontSize: 11 } },
+        series: [{
+            type: 'custom',
+            renderItem: (params, api) => {
+                const catIdx = api.value(0);
+                const start = api.coord([api.value(1), catIdx]);
+                const end = api.coord([api.value(2), catIdx]);
+                const height = api.size([0, 1])[1] * 0.5;
+                return { type: 'rect', shape: { x: start[0], y: start[1] - height / 2, width: Math.max(end[0] - start[0], 4), height }, style: api.style(), encode: { x: [1, 2], y: 0 } };
+            },
+            encode: { x: [1, 2], y: 0 },
+            data: items,
+        }],
+    };
+}
+
+// Match features from data to plan phases
+function getFeatureDetails(planPhases, features) {
+    const result = [];
+    (planPhases || []).forEach(ph => {
+        (ph.items || []).forEach(itemName => {
+            const f = features.find(feat => feat.name.includes(itemName) || itemName.includes(feat.name.substring(0, 8)));
+            if (f) result.push({ ...f, phase: ph.name });
+        });
+    });
+    return result;
+}
+
+function getUrgencyLabel(deadline) {
+    if (!deadline) return { text: '--', color: '#9CA3AF' };
+    const now = new Date();
+    const dl = new Date(deadline + '-01');
+    const monthDiff = (dl.getFullYear() - now.getFullYear()) * 12 + dl.getMonth() - now.getMonth();
+    if (monthDiff < 0) return { text: '宸茶繃鏈?, color: '#EF4444' };
+    if (monthDiff === 0) return { text: '绱ф€?, color: '#EF4444' };
+    if (monthDiff === 1) return { text: '棰勮', color: '#F59E0B' };
+    return { text: '姝ｅ父', color: '#22C55E' };
+}
+
+const RISK_LABEL = { high: '楂?, medium: '涓?, low: '浣? };
+const RISK_COLOR = { high: '#EF4444', medium: '#F59E0B', low: '#22C55E' };
+const MOD_COLOR = { 智能问数: '#EF4444', 营销助手: '#F59E0B', 营销策略: '#3B82F6', 基础后台: '#8B5CF6' };
+
+const MOD_COLORS_LIST = ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#06B6D4', '#EC4899'];
+
+/* ===== Hero Slide: 鏂规鎬昏 鈥?宸﹀姛鑳?鍙虫椂闂磋酱 ===== */
+function PlanHeroSlide({ plan, features, onUpdateTask }) {
+    const [editingTask, setEditingTask] = useState(null);
+    const [popoverPos, setPopoverPos] = useState({ x: 0, y: 0 });
+    const coreFeatures = plan.coreFeatures || [];
+    const baseInfra = plan.baseInfra || [];
+    const phaseFeatures = plan.phaseFeatures || null; // multi-phase mode
+    const isMultiPhase = !!phaseFeatures;
+
+    const allGantt = plan.ganttTasks || [];
+    const allTasks = allGantt.filter(t => !t.milestone);
+    const milestones = isMultiPhase ? allGantt.filter(t => t.milestone) : allGantt.filter(t => t.milestone && t.name.includes('第一'));
+
+    // For single-phase (plan-a): only show phase 1
+    // For multi-phase (plan-b): show ALL tasks
+    const phase1Sections = new Set(['核心功能', '基础底座']);
+    const displayTasks = isMultiPhase ? allTasks : allTasks.filter(t => phase1Sections.has(t.section));
+
+    // Calculate calendar span
+    const p1Dates = displayTasks.map(t => {
+        const s = new Date(t.start).getTime();
+        return { start: s, end: s + t.days * 86400000 };
+    });
+    const calendarStart = p1Dates.length ? Math.min(...p1Dates.map(d => d.start)) : 0;
+    const calendarEnd = p1Dates.length ? Math.max(...p1Dates.map(d => d.end)) : 0;
+    const calendarDays = p1Dates.length ? Math.ceil((calendarEnd - calendarStart) / 86400000) : 0;
+    const totalEffort = displayTasks.reduce((s, t) => s + (t.days || 0), 0);
+
+    // Timeline
+    const minDate = calendarStart;
+    const maxDate = calendarEnd;
+    const range = maxDate - minDate || 1;
+
+    const months = [];
+    if (p1Dates.length > 0) {
+        // Every 7 days
+        const d = new Date(minDate);
+        while (d.getTime() <= maxDate) {
+            const pct = Math.max(0, Math.min(100, ((d.getTime() - minDate) / range) * 100));
+            months.push({ label: (d.getMonth() + 1) + '/' + d.getDate(), pct });
+            d.setDate(d.getDate() + 7);
+        }
+    }
+
+    const sectionOrder = [];
+    const sectionMap = {};
+    displayTasks.forEach(t => {
+        if (!sectionMap[t.section]) { sectionMap[t.section] = []; sectionOrder.push(t.section); }
+        sectionMap[t.section].push(t);
+    });
+    const sectionColors = { '鏍稿績鍔熻兘': '#6366F1', '鍩虹搴曞骇': '#8B5CF6' };
+
+    // Risks
+    const coreRisks = [];
+    coreFeatures.forEach(cf => {
+        const mapped = (cf.featureIds || []).map(id => features.find(f => f.id === id)).filter(Boolean);
+        mapped.forEach(f => {
+            (f.risks || []).filter(r => r.level === 'high').forEach(r => {
+                coreRisks.push({ feature: cf.name, text: r.text });
+            });
+        });
+    });
+
+    // Find gantt index for a task by name
+    const findTaskIdx = (name) => allGantt.findIndex(t => t.name === name);
+
+    return (
+        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, marginBottom: 20, overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
+                        {plan.name}
+                        <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 600, color: '#6366F1' }}>
+                            宸ユ湡 {calendarDays} 澶?
+                        </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{plan.strategy}</div>
+                </div>
+                {plan.tag && <span style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#EEF2FF', color: '#4F46E5' }}>{plan.tag}</span>}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', minHeight: 320 }}>
+                {/* LEFT panel */}
+                <div style={{ padding: '16px 20px', borderRight: '1px solid #E5E7EB', background: '#FAFBFC', overflowY: 'auto', maxHeight: isMultiPhase ? 600 : 'none' }}>
+
+                    {/* Multi-phase mode (plan-b) */}
+                    {isMultiPhase && phaseFeatures.map((pf, pi) => {
+                        const phaseColor = ['#6366F1', '#3B82F6', '#22C55E'][pi] || '#6B7280';
+                        return (
+                            <div key={pi} style={{ marginBottom: 16 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: '2px solid ' + phaseColor }}>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: phaseColor }}>{pf.title}</span>
+                                </div>
+                                {pf.features.map((cf, i) => {
+                                    const modColor = MOD_COLOR[cf.module] || '#6366F1';
+                                    return (
+                                        <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < pf.features.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                                <div style={{ width: 5, height: 5, borderRadius: '50%', background: modColor, flexShrink: 0 }} />
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{cf.name}</span>
+                                                <span style={{ padding: '0 4px', borderRadius: 2, fontSize: 9, background: modColor + '15', color: modColor }}>{cf.module}</span>
+                                            </div>
+                                            <div style={{ fontSize: 10, color: '#6B7280', marginBottom: 4 }}>{cf.desc}</div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3, fontSize: 9 }}>
+                                                <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#6366F1' }}>我方</span> {cf.ourWork}</div>
+                                                <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#D97706' }}>客户</span> {cf.clientWork}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+
+                    {/* Single-phase mode (plan-a) */}
+                    {!isMultiPhase && coreFeatures.map((cf, i) => {
+                    {!isMultiPhase && coreFeatures.map((cf, i) => {
+                        const modColor = MOD_COLOR[cf.module] || '#6366F1';
+                        const mapped = (cf.featureIds || []).map(id => features.find(f => f.id === id)).filter(Boolean);
+                        const relTasks = displayTasks.filter(t => t.name.includes(cf.name.substring(0, 4)) || mapped.some(f => t.name.includes(f.name.substring(0, 6))));
+                        const days = relTasks.reduce((s, t) => s + (t.days || 0), 0);
+                        return (
+                            <div key={i} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: i < coreFeatures.length - 1 ? '1px solid #E5E7EB' : 'none' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: modColor, flexShrink: 0 }} />
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{cf.name}</span>
+                                    {days > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#6366F1', background: '#EEF2FF', padding: '1px 6px', borderRadius: 3 }}>{days}天</span>}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.5, marginBottom: 6 }}>{cf.desc}</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 10 }}>
+                                    <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#6366F1' }}>我方</span> {cf.ourWork}</div>
+                                    <div style={{ color: '#4B5563' }}><span style={{ fontWeight: 600, color: '#D97706' }}>客户</span> {cf.clientWork}</div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {!isMultiPhase && baseInfra && baseInfra.length > 0 && (
+                        <div style={{ background: '#F3F4F6', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>同步建设</div>
+                            {baseInfra.map((b, i) => (
+                                <div key={i} style={{ fontSize: 11, color: '#4B5563', padding: '2px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ width: 4, height: 4, borderRadius: 1, background: '#8B5CF6', flexShrink: 0 }} />
+                                    {b.name}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {coreRisks.length > 0 && (
+                        <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 10 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#DC2626', marginBottom: 4 }}>风险项</div>
+                            {coreRisks.map((r, i) => (
+                                <div key={i} style={{ fontSize: 10, color: '#4B5563', padding: '2px 0', display: 'flex', gap: 6, lineHeight: 1.4 }}>
+                                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#EF4444', marginTop: 4, flexShrink: 0 }} />
+                                    <div><b>{r.feature}:</b> {r.text}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                {/* RIGHT: Timeline -- click bar to edit */}
+                <div style={{ padding: '16px 20px', position: 'relative' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>交付时间轴 <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>（点击任务条编辑）</span></div>
+                    <div style={{ position: 'relative', height: 20, marginBottom: 8, borderBottom: '1px solid #E5E7EB' }}>
+                        {months.map((m, i) => (
+                            <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, transform: 'translateX(-50%)', fontSize: 10, fontWeight: 600, color: '#9CA3AF' }}>{m.label}</div>
+                        ))}
+                    </div>
+                    {sectionOrder.map((sec, si) => {
+                        const secTasks = sectionMap[sec];
+                        const color = sectionColors[sec] || '#6B7280';
+                        return (
+                            <div key={si} style={{ marginBottom: 6 }}>
+                                <div style={{ fontSize: 10, fontWeight: 600, color, marginBottom: 4 }}>{sec}</div>
+                                <div className="gantt-lane" style={{ position: 'relative', minHeight: secTasks.length * 28 + 2, background: si % 2 === 0 ? '#FAFBFC' : '#fff', borderRadius: 4, border: '1px solid #F3F4F6' }}>
+                                    {secTasks.map((t, ti) => {
+                                        const s = new Date(t.start).getTime();
+                                        const left = ((s - minDate) / range) * 100;
+                                        const width = Math.max(5, (t.days * 86400000 / range) * 100);
+                                        const idx = findTaskIdx(t.name);
+                                        const isEditing = editingTask === t.name;
+                                        const startLabel = `${new Date(t.start).getMonth() + 1}/${new Date(t.start).getDate()}`;
+                                        return (
+                                            <div key={ti}
+                                                style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: ti * 28 + 2, height: 22, zIndex: isEditing ? 10 : 1, cursor: 'grab' }}
+                                                draggable={false}
+                                                onMouseDown={(e) => {
+                                                    if (e.button !== 0) return;
+                                                    e.preventDefault();
+                                                    const lane = e.currentTarget.closest('.gantt-lane');
+                                                    if (!lane) return;
+                                                    const laneRect = lane.getBoundingClientRect();
+                                                    const startX = e.clientX;
+                                                    const origStart = new Date(t.start).getTime();
+                                                    const oneDayPx = laneRect.width * (86400000 / range);
+
+                                                    const onMove = (ev) => {
+                                                        const dx = ev.clientX - startX;
+                                                        const daysDelta = Math.round(dx / oneDayPx);
+                                                        if (daysDelta !== 0) {
+                                                            const newStart = new Date(origStart + daysDelta * 86400000);
+                                                            const y = newStart.getFullYear();
+                                                            const m = String(newStart.getMonth() + 1).padStart(2, '0');
+                                                            const d = String(newStart.getDate()).padStart(2, '0');
+                                                            onUpdateTask(idx, 'start', `${y}-${m}-${d}`);
+                                                        }
+                                                    };
+                                                    const onUp = () => {
+                                                        document.removeEventListener('mousemove', onMove);
+                                                        document.removeEventListener('mouseup', onUp);
+                                                        document.body.style.cursor = '';
+                                                        document.body.style.userSelect = '';
+                                                    };
+                                                    document.body.style.cursor = 'grabbing';
+                                                    document.body.style.userSelect = 'none';
+                                                    document.addEventListener('mousemove', onMove);
+                                                    document.addEventListener('mouseup', onUp);
+                                                }}
+                                                onClick={(e) => {
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setPopoverPos({ x: Math.min(rect.left, window.innerWidth - 240), y: rect.bottom + 4 });
+                                                    setEditingTask(isEditing ? null : t.name);
+                                                }}
+                                            >
+                                                <div style={{
+                                                    width: '100%', height: '100%',
+                                                    background: isEditing ? `${color}30` : `${color}18`,
+                                                    border: `1px solid ${isEditing ? color : color + '44'}`,
+                                                    borderRadius: 4, display: 'flex', alignItems: 'center', paddingLeft: 6,
+                                                    overflow: 'hidden', pointerEvents: 'none',
+                                                }}>
+                                                    <span style={{ fontSize: 10, fontWeight: 500, color: '#374151', whiteSpace: 'nowrap' }}>{t.name}</span>
+                                                    <span style={{ fontSize: 9, color: '#9CA3AF', marginLeft: 4, whiteSpace: 'nowrap' }}>{startLabel}</span>
+                                                    <span style={{ marginLeft: 'auto', fontSize: 9, color: '#6366F1', paddingRight: 4, flexShrink: 0, fontWeight: 600 }}>{t.days}d</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {milestones.length > 0 && (
+                        <div style={{ position: 'relative', height: 28, marginTop: 8, borderTop: '1px solid #E5E7EB', paddingTop: 6 }}>
+                            {milestones.map((m, mi) => {
+                                const s = new Date(m.start).getTime();
+                                const left = Math.min(95, Math.max(5, ((s - minDate) / range) * 100));
+                                return (
+                                    <div key={mi} style={{ position: 'absolute', left: `${left}%`, textAlign: 'center' }}>
+                                        <div style={{ width: 8, height: 8, background: '#F59E0B', transform: 'rotate(45deg)', margin: '0 auto 2px' }} />
+                                        <div style={{ fontSize: 9, color: '#6B7280', whiteSpace: 'nowrap' }}>{m.name}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Fixed popover for editing 鈥?won't be clipped */}
+            {editingTask && (() => {
+                const t = displayTasks.find(x => x.name === editingTask);
+                if (!t) return null;
+                const idx = findTaskIdx(t.name);
+                return (
+                    <>
+                        <div onClick={() => setEditingTask(null)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                        <div onClick={e => e.stopPropagation()} style={{
+                            position: 'fixed', left: popoverPos.x, top: popoverPos.y,
+                            background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8,
+                            padding: 14, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 1000, width: 240,
+                        }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#111827' }}>{t.name}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <label style={{ fontSize: 10, color: '#6B7280' }}>
+                                    鍚嶇О
+                                    <input value={t.name} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '4px 6px', fontSize: 11, marginTop: 2 }}
+                                        onChange={e => onUpdateTask(idx, 'name', e.target.value)} />
+                                </label>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <label style={{ fontSize: 10, color: '#6B7280', flex: 1 }}>
+                                        寮€濮嬫棩鏈?
+                                        <input type="date" value={t.start} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '4px 4px', fontSize: 11, marginTop: 2 }}
+                                            onChange={e => onUpdateTask(idx, 'start', e.target.value)} />
+                                    </label>
+                                    <label style={{ fontSize: 10, color: '#6B7280', width: 60 }}>
+                                        澶╂暟
+                                        <input type="number" value={t.days} min={1} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '4px 4px', fontSize: 11, textAlign: 'center', marginTop: 2 }}
+                                            onChange={e => onUpdateTask(idx, 'days', parseInt(e.target.value) || 1)} />
+                                    </label>
+                                </div>
+                            </div>
+                            <button onClick={() => setEditingTask(null)} style={{ marginTop: 8, width: '100%', background: '#F3F4F6', border: 'none', borderRadius: 4, padding: '5px 0', fontSize: 11, cursor: 'pointer', color: '#374151' }}>瀹屾垚</button>
+                        </div>
+                    </>
+                );
+            })()}
+        </div>
+    );
+}
+
+function RoadmapTimeline({ tasks, coreFeatures, baseInfra, features }) {
+    if (!tasks || tasks.length === 0) return null;
+
+    // Build a flat list of items with their timeline positions
+    const allItems = [];
+    const allDates = tasks.filter(t => !t.milestone).map(t => {
+        const s = new Date(t.start).getTime();
+        return [s, s + t.days * 86400000];
+    }).flat();
+    const minDate = Math.min(...allDates);
+    const maxDate = Math.max(...allDates);
+    const range = maxDate - minDate || 1;
+
+    // Group: core features, base infra, other phases
+    const sections = [];
+    if (coreFeatures) {
+        coreFeatures.forEach((cf, i) => {
+            const relatedTasks = tasks.filter(t =>
+                !t.milestone && (
+                    t.name.includes(cf.name.substring(0, 6)) ||
+                    (cf.featureIds || []).some(id => {
+                        const f = features.find(x => x.id === id);
+                        return f && t.name.includes(f.name.substring(0, 6));
+                    })
+                )
+            );
+            if (relatedTasks.length > 0) {
+                sections.push({ type: 'core', label: cf.name, color: MOD_COLOR[cf.module] || MOD_COLORS_LIST[i], tasks: relatedTasks });
+            }
+        });
+    }
+    if (baseInfra) {
+        const infraTasks = tasks.filter(t =>
+            !t.milestone && t.section === '基础底座'
+        );
+        if (infraTasks.length > 0) {
+            sections.push({ type: 'infra', label: '基础能力底座', color: '#8B5CF6', tasks: infraTasks });
+        }
+    }
+    // Add remaining sections
+    const usedNames = new Set(sections.flatMap(s => s.tasks.map(t => t.name)));
+    const otherSections = {};
+    tasks.filter(t => !t.milestone && !usedNames.has(t.name)).forEach(t => {
+        if (!otherSections[t.section]) otherSections[t.section] = [];
+        otherSections[t.section].push(t);
+    });
+    Object.entries(otherSections).forEach(([sec, tks], i) => {
+        sections.push({ type: 'other', label: sec, color: MOD_COLORS_LIST[(i + 3) % MOD_COLORS_LIST.length], tasks: tks });
+    });
+
+    // Milestones
+    const milestones = tasks.filter(t => t.milestone);
+
+    // Month labels
+    const months = [];
+    const startMonth = new Date(minDate);
+    startMonth.setDate(1);
+    const endMonth = new Date(maxDate);
+    while (startMonth <= endMonth) {
+        const pct = ((startMonth.getTime() - minDate) / range) * 100;
+        months.push({ label: `${startMonth.getMonth() + 1}鏈坄, pct: Math.max(0, Math.min(100, pct)) });
+        startMonth.setMonth(startMonth.getMonth() + 1);
+    }
+
+    return (
+        <div style={{ background: '#FAFBFF', border: '1px solid #E5E7EB', borderRadius: 10, padding: '20px 24px', marginBottom: 24, overflowX: 'auto' }}>
+            {/* Month axis */}
+            <div style={{ position: 'relative', height: 24, marginBottom: 8, marginLeft: 140, borderBottom: '1px solid #E5E7EB' }}>
+                {months.map((m, i) => (
+                    <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, transform: 'translateX(-50%)', fontSize: 11, fontWeight: 600, color: '#9CA3AF' }}>{m.label}</div>
+                ))}
+            </div>
+
+            {/* Swimlanes */}
+            {sections.map((sec, si) => (
+                <div key={si} style={{ display: 'flex', alignItems: 'stretch', marginBottom: 2 }}>
+                    <div style={{ width: 140, flexShrink: 0, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: sec.type === 'core' ? '50%' : 2, background: sec.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#374151', lineHeight: 1.2 }}>{sec.label}</span>
+                    </div>
+                    <div style={{ flex: 1, position: 'relative', minHeight: sec.tasks.length * 28 + 4, background: si % 2 === 0 ? '#fff' : '#FAFBFF', borderRadius: 4 }}>
+                        {sec.tasks.map((t, ti) => {
+                            const s = new Date(t.start).getTime();
+                            const left = ((s - minDate) / range) * 100;
+                            const width = Math.max(2, (t.days * 86400000 / range) * 100);
+                            return (
+                                <div key={ti} title={`${t.name}\n${t.start} ~ ${t.days}澶ー} style={{
+                                    position: 'absolute', left: `${left}%`, width: `${width}%`, top: ti * 28 + 2, height: 22,
+                                    background: sec.color + '22', border: `1px solid ${sec.color}55`, borderRadius: 4,
+                                    display: 'flex', alignItems: 'center', paddingLeft: 6, overflow: 'hidden', cursor: 'default',
+                                }}>
+                                    <span style={{ fontSize: 10, fontWeight: 500, color: '#374151', whiteSpace: 'nowrap' }}>{t.name}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
+
+            {/* Milestones */}
+            {milestones.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', marginTop: 8 }}>
+                    <div style={{ width: 140, flexShrink: 0, padding: '6px 8px', fontSize: 11, fontWeight: 600, color: '#9CA3AF' }}>閲岀▼纰?/div>
+                    <div style={{ flex: 1, position: 'relative', height: 28 }}>
+                        {milestones.map((m, mi) => {
+                            const s = new Date(m.start).getTime();
+                            const left = ((s - minDate) / range) * 100;
+                            return (
+                                <div key={mi} style={{ position: 'absolute', left: `${left}%`, transform: 'translateX(-50%)', textAlign: 'center' }}>
+                                    <div style={{ width: 12, height: 12, background: '#F59E0B', transform: 'rotate(45deg)', margin: '0 auto 2px' }} />
+                                    <div style={{ fontSize: 9, color: '#6B7280', whiteSpace: 'nowrap' }}>{m.name}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function PlanDesign() {
+    const { plans, features, updatePlan, addPlan } = useStore();
+    const [activePlan, setActivePlan] = useState(plans[0]?.id || '');
+    const [showComparison, setShowComparison] = useState(true);
+    const [showTaskEditor, setShowTaskEditor] = useState(false);
+
+    const plan = plans.find(p => p.id === activePlan) || plans[0];
+    const planFeatures = plan ? getFeatureDetails(plan.phases, features) : [];
+
+    const updateTask = (idx, field, value) => {
+        const tasks = plan.ganttTasks.map((t, i) => i === idx ? { ...t, [field]: value } : t);
+        updatePlan(plan.id, { ganttTasks: tasks });
+    };
+
+    const ganttOption = plan ? buildGanttOption(plan.ganttTasks) : null;
+
+    return (
+        <div>
+            <div className="section-title">鏂规璁捐</div>
+
+            {/* Comparison */}
+            {plans.length >= 2 && (
+                <div className="card" style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showComparison ? 12 : 0 }}>
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>鏂规瀵规瘮</span>
+                        <button className="btn btn-sm" onClick={() => setShowComparison(!showComparison)}>{showComparison ? '鏀惰捣' : '灞曞紑'}</button>
+                    </div>
+                    {showComparison && (
+                        <table className="comparison-table">
+                            <thead><tr><th></th>{plans.map(p => <th key={p.id}>{p.name}{p.tag ? ` [${p.tag}]` : ''}</th>)}</tr></thead>
+                            <tbody>
+                                <tr><td style={{ fontWeight: 600 }}>绛栫暐</td>{plans.map(p => <td key={p.id}>{p.strategy}</td>)}</tr>
+                                <tr><td style={{ fontWeight: 600 }}>鏍稿績鍔熻兘</td>{plans.map(p => <td key={p.id}>{(p.coreFeatures || []).map(f => typeof f === 'object' ? f.name : f).join('; ')}</td>)}</tr>
+                                <tr><td style={{ fontWeight: 600 }}>闃舵鏁?/td>{plans.map(p => <td key={p.id}>{(p.phases || []).length} 涓樁娈?/td>)}</tr>
+                                <tr><td style={{ fontWeight: 600 }}>浼樺娍</td>{plans.map(p => <td key={p.id}>{(p.pros || []).join('; ')}</td>)}</tr>
+                                <tr><td style={{ fontWeight: 600 }}>鍔ｅ娍</td>{plans.map(p => <td key={p.id}>{(p.cons || []).join('; ')}</td>)}</tr>
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            )}
+
+            {/* Tabs */}
+            <div className="plan-tabs">
+                {plans.map(p => (
+                    <button key={p.id} className={`plan-tab${activePlan === p.id ? ' active' : ''}`} onClick={() => setActivePlan(p.id)}>
+                        {p.name.length > 15 ? p.name.slice(0, 15) + '...' : p.name}
+                        {p.tag && <span style={{ marginLeft: 6, fontSize: 10, background: '#6366F1', color: '#fff', padding: '1px 6px', borderRadius: 3 }}>{p.tag}</span>}
+                    </button>
+                ))}
+                <button className="plan-tab plan-add-tab" onClick={addPlan}>+ 鏂版柟妗?/button>
+            </div>
+
+            {plan && (
+                <div>
+                    {/* ===== HERO SLIDE 鈥?涓€椤垫€昏 ===== */}
+                    {plan.coreFeatures && typeof plan.coreFeatures[0] === 'object' && (
+                        <PlanHeroSlide plan={plan} features={features} onUpdateTask={updateTask} />
+                    )}
+
+                    <div className="card" style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 14, color: '#6B7280', marginBottom: 16 }}>{plan.summary}</div>
+
+                        {/* Core Features (new structured format) */}
+                        {plan.coreFeatures && typeof plan.coreFeatures[0] === 'object' && (
+                            <>
+                                <div className="section-title" style={{ marginBottom: 12 }}>鏍稿績鍔熻兘锛堢涓€闃舵浜や粯锛?/div>
+                                <div style={{ display: 'grid', gap: 12, marginBottom: 24 }}>
+                                    {plan.coreFeatures.map((f, i) => (
+                                        <div key={i} style={{ background: '#FAFBFF', border: '1px solid #E5E7EB', borderRadius: 10, padding: 16, borderLeft: `4px solid ${MOD_COLOR[f.module] || '#6366F1'}` }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                                <span style={{ fontSize: 20, fontWeight: 700, color: MOD_COLOR[f.module] || '#6366F1', opacity: 0.3 }}>0{i + 1}</span>
+                                                <span style={{ fontSize: 15, fontWeight: 600 }}>{f.name}</span>
+                                                <span style={{ padding: '1px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: (MOD_COLOR[f.module] || '#6366F1') + '18', color: MOD_COLOR[f.module] || '#6366F1' }}>{f.module}</span>
+                                            </div>
+                                            <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 12 }}>{f.desc}</div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                                                <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 10px' }}>
+                                                    <div style={{ fontSize: 10, fontWeight: 600, color: '#6366F1', textTransform: 'uppercase', marginBottom: 4 }}>鎴戞柟</div>
+                                                    <div style={{ fontSize: 11, color: '#374151' }}>{f.ourWork}</div>
+                                                </div>
+                                                <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 10px' }}>
+                                                    <div style={{ fontSize: 10, fontWeight: 600, color: '#F59E0B', textTransform: 'uppercase', marginBottom: 4 }}>瀹㈡埛鏂?/div>
+                                                    <div style={{ fontSize: 11, color: '#374151' }}>{f.clientWork}</div>
+                                                </div>
+                                                <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 10px' }}>
+                                                    <div style={{ fontSize: 10, fontWeight: 600, color: '#22C55E', textTransform: 'uppercase', marginBottom: 4 }}>鍗忓悓</div>
+                                                    <div style={{ fontSize: 11, color: '#374151' }}>{f.jointWork}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
+                        {/* Core Features (old string format fallback) */}
+                        {plan.coreFeatures && typeof plan.coreFeatures[0] === 'string' && (
+                            <>
+                                <div className="section-title" style={{ marginBottom: 8 }}>鏍稿績鍔熻兘</div>
+                                <ul style={{ paddingLeft: 16, marginBottom: 16 }}>{plan.coreFeatures.map((f, i) => <li key={i} style={{ fontSize: 13, padding: '2px 0' }}>{f}</li>)}</ul>
+                            </>
+                        )}
+
+                        {/* Base Infrastructure */}
+                        {plan.baseInfra && (
+                            <>
+                                <div className="section-title" style={{ marginBottom: 12 }}>鍩虹鑳藉姏搴曞骇</div>
+                                <div style={{ background: '#F8FAFC', border: '1px solid #E5E7EB', borderRadius: 10, padding: 16, marginBottom: 24 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        {plan.baseInfra.map((b, i) => {
+                                            const mapped = (b.featureIds || []).map(id => features.find(f => f.id === id)).filter(Boolean);
+                                            return (
+                                                <div key={i} style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px' }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1F2937', marginBottom: 2 }}>{b.name}</div>
+                                                    <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>{b.desc}</div>
+                                                    <div style={{ fontSize: 10, color: '#8B5CF6', marginBottom: 4 }}>鏀拺鍘熷洜: {b.why}</div>
+                                                    {mapped.length > 0 && (
+                                                        <div style={{ fontSize: 10, color: '#9CA3AF', borderTop: '1px solid #F3F4F6', paddingTop: 4 }}>
+                                                            瀵瑰簲娓呭崟: {mapped.map(f => f.name).join(', ')}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* ===== Feature Mapping ===== */}
+                        {plan.coreFeatures && typeof plan.coreFeatures[0] === 'object' && (
+                            <>
+                                <div className="section-title" style={{ marginBottom: 12 }}>鍔熻兘娓呭崟鏄犲皠</div>
+                                <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                        <thead>
+                                            <tr style={{ background: '#F9FAFB' }}>
+                                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>鏂规鍔熻兘</th>
+                                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>瀵瑰簲鍔熻兘娓呭崟</th>
+                                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>妯″潡</th>
+                                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>浼樺厛绾?/th>
+                                                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>椋庨櫓</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {[...(plan.coreFeatures || []), ...(plan.baseInfra || [])].map((cf, ci) => {
+                                                const mapped = (cf.featureIds || []).map(id => features.find(f => f.id === id)).filter(Boolean);
+                                                const isCore = ci < (plan.coreFeatures || []).length;
+                                                return mapped.map((f, fi) => (
+                                                    <tr key={`${ci}-${fi}`} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        {fi === 0 && (
+                                                            <td rowSpan={mapped.length} style={{ padding: '8px 12px', fontWeight: 600, verticalAlign: 'top', borderRight: '1px solid #F3F4F6', background: isCore ? '#FAFBFF' : '#FAFAFA' }}>
+                                                                <span style={{ color: isCore ? (MOD_COLOR[cf.module] || '#6366F1') : '#8B5CF6' }}>
+                                                                    {isCore ? '鈼? : '鈼?} {cf.name}
+                                                                </span>
+                                                                <div style={{ fontSize: 10, fontWeight: 400, color: '#9CA3AF', marginTop: 2 }}>{isCore ? '鏍稿績鍔熻兘' : '鍩虹搴曞骇'}</div>
+                                                            </td>
+                                                        )}
+                                                        <td style={{ padding: '8px 12px' }}>{f.name}</td>
+                                                        <td style={{ padding: '8px 12px' }}>
+                                                            <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: (MOD_COLOR[f.module] || '#6366F1') + '15', color: MOD_COLOR[f.module] || '#6366F1' }}>{f.module}</span>
+                                                        </td>
+                                                        <td style={{ padding: '8px 12px', fontWeight: 500 }}>{f.priority}</td>
+                                                        <td style={{ padding: '8px 12px' }}>
+                                                            <span style={{ color: RISK_COLOR[f.risk], fontWeight: 500 }}>{RISK_LABEL[f.risk]}</span>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        )}
+
+                        {/* ===== Timeline / Roadmap ===== */}
+                        {plan.ganttTasks && (
+                            <>
+                                <div className="section-title" style={{ marginBottom: 12 }}>瀹炴柦璺嚎鍥?/div>
+                                <RoadmapTimeline tasks={plan.ganttTasks} coreFeatures={plan.coreFeatures} baseInfra={plan.baseInfra} features={features} />
+                            </>
+                        )}
+
+                        {/* Collaboration Flow */}
+                        <div className="section-title" style={{ marginTop: 24, marginBottom: 12 }}>鍚堜綔妯″紡娴佺▼</div>
+                        <div style={{ background: '#F8FAFC', border: '1px solid #E5E7EB', borderRadius: 10, padding: 24 }}>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                {[
+                                    { label: '闇€姹傜‘璁?, sub: '鍙屾柟瀵归綈鍔熻兘鑼冨洿', color: '#6366F1' },
+                                    { label: '鎶€鏈?POC', sub: 'NL2SQL 鍙鎬ч獙璇?, color: '#8B5CF6' },
+                                    { label: '鐜鎼缓', sub: 'Copilot Studio + Dataverse', color: '#3B82F6' },
+                                    { label: '杩唬寮€鍙?, sub: '鎸夋壒娆′氦浠樺姛鑳?, color: '#22C55E' },
+                                    { label: 'UAT 楠屾敹', sub: '鐢ㄦ埛楠岃瘉 + 鍙嶉', color: '#F59E0B' },
+                                    { label: '姝ｅ紡涓婄嚎', sub: '鐢熶骇鐜閮ㄧ讲', color: '#EF4444' },
+                                ].map((step, i, arr) => (
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div style={{ textAlign: 'center', minWidth: 100 }}>
+                                            <div style={{ width: 48, height: 48, borderRadius: '50%', background: step.color + '15', border: `2px solid ${step.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: 16, fontWeight: 700, color: step.color }}>{i + 1}</div>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1F2937' }}>{step.label}</div>
+                                            <div style={{ fontSize: 10, color: '#6B7280', marginTop: 2 }}>{step.sub}</div>
+                                        </div>
+                                        {i < arr.length - 1 && <div style={{ fontSize: 18, color: '#D1D5DB' }}>鈫?/div>}
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{ marginTop: 16, padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12, color: '#4B5563', lineHeight: 1.8 }}>
+                                <b>鍚堜綔鍒嗗伐锛?/b>鎴戞柟璐熻矗 Copilot Studio Agent 寮€鍙?+ NL2SQL 闆嗘垚 + Dataverse 閰嶇疆绠＄悊銆傚鎴锋柟璐熻矗 CDP 鏁版嵁搴?API 寮€鏀?+ 鏁版嵁瀛楀吀鎻愪緵 + UAT 娴嬭瘯銆傚弻鏂瑰叡鍚屽弬涓庨渶姹傝瘎瀹″拰鎶€鏈€夊瀷銆?
+                            </div>
+                        </div>
+
+                        {/* Phases */}
+                        <div className="section-title" style={{ marginTop: 24 }}>闃舵瑙勫垝</div>
+                        {(plan.phases || []).map((ph, i) => (
+                            <div className="phase-card" key={i}>
+                                <h4>{ph.name}</h4>
+                                <div style={{ fontSize: 12, color: '#6366F1', marginBottom: 6 }}>閲嶇偣: {ph.focus}</div>
+                                <ul className="phase-items">{(ph.items || []).map((item, j) => <li key={j}>{item}</li>)}</ul>
+                                {ph.acceptance && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 6 }}>楠屾敹鏍囧噯: {ph.acceptance}</div>}
+                            </div>
+                        ))}
+
+                        <div className="pros-cons">
+                            <div>
+                                <div className="section-title">浼樺娍</div>
+                                <ul className="pros-list">{(plan.pros || []).map((p, i) => <li key={i}>{p}</li>)}</ul>
+                            </div>
+                            <div>
+                                <div className="section-title">鍔ｅ娍</div>
+                                <ul className="cons-list">{(plan.cons || []).map((c, i) => <li key={i}>{c}</li>)}</ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Gantt */}
+                    {ganttOption && (
+                        <div className="card" style={{ marginBottom: 16 }}>
+                            <div className="section-title" style={{ marginBottom: 8 }}>鐢樼壒鍥?/div>
+                            <ReactECharts option={ganttOption} style={{ height: 300 }} />
+                        </div>
+                    )}
+
+                    {/* Task Editor */}
+                    <div className="card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showTaskEditor ? 12 : 0 }}>
+                            <span className="section-title" style={{ margin: 0 }}>浠诲姟缂栬緫</span>
+                            <button className="btn btn-sm" onClick={() => setShowTaskEditor(!showTaskEditor)}>{showTaskEditor ? '鏀惰捣' : '灞曞紑'}</button>
+                        </div>
+                        {showTaskEditor && plan.ganttTasks && (
+                            <table className="gantt-task-table">
+                                <thead><tr><th>闃舵</th><th>鍚嶇О</th><th>寮€濮嬫棩鏈?/th><th>澶╂暟</th></tr></thead>
+                                <tbody>
+                                    {plan.ganttTasks.map((t, i) => (
+                                        <tr key={i}>
+                                            <td><input value={t.section} onChange={e => updateTask(i, 'section', e.target.value)} /></td>
+                                            <td><input value={t.name} onChange={e => updateTask(i, 'name', e.target.value)} /></td>
+                                            <td><input type="date" value={t.start} onChange={e => updateTask(i, 'start', e.target.value)} /></td>
+                                            <td><input type="number" value={t.days} onChange={e => updateTask(i, 'days', parseInt(e.target.value) || 0)} min={0} /></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
