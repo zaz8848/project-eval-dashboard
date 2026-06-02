@@ -173,7 +173,7 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
             }}>
                 <span style={{ fontSize: 10, fontWeight: 500, color: '#374151', whiteSpace: 'nowrap' }}>{t.name}</span>
                 <span style={{ fontSize: 9, color: '#9CA3AF', marginLeft: 4, whiteSpace: 'nowrap' }}>{startLabel}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 9, color: color, paddingRight: 4, flexShrink: 0, fontWeight: 600 }}>{(t.headcount || 1) + '\u00D7' + t.days + '=' + ((t.headcount || 1) * t.days) + '\u4eba\u5929'}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 9, color: color, paddingRight: 4, flexShrink: 0, fontWeight: 600 }}>{t.days + 'd'}</span>
             </div>
         </div>
     );
@@ -186,10 +186,7 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
                     <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
                         {plan.name}
                         <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 600, color: '#6366F1' }}>
-                            {'\u5de5\u671f ' + calendarDays + ' \u5929'}
-                        </span>
-                        <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: '#F59E0B' }}>
-                            {'\u5408\u8ba1 ' + displayTasks.reduce((s, t) => s + (t.days || 0) * (t.headcount || 1), 0) + ' \u4eba\u5929'}
+                            {displayTasks.reduce((s, t) => s + (t.days || 0) * (t.headcount || 1), 0) + ' \u4eba\u5929'}
                         </span>
                     </div>
                     <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{plan.strategy}</div>
