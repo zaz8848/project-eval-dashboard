@@ -384,15 +384,15 @@ const PLANS = [
             { section: 'V1.0', name: 'AI 效率统计', start: '2026-08-01', days: 10 },
             { section: '里程碑', name: 'V1.0 交付', start: '2026-08-22', days: 0, milestone: true },
             // V2.0
-            { section: 'V2.0', name: '营销画布', start: '2026-09-01', days: 14 },
-            { section: 'V2.0', name: '营销建议', start: '2026-09-01', days: 14 },
-            { section: 'V2.0', name: '后台升级', start: '2026-09-08', days: 12 },
+            { section: 'V2.0', name: '营销画布', start: '2026-08-26', days: 21 },
+            { section: 'V2.0', name: '营销建议', start: '2026-09-01', days: 21 },
+            { section: 'V2.0', name: '后台升级', start: '2026-09-01', days: 21 },
             { section: '里程碑', name: 'V2.0 交付', start: '2026-09-22', days: 0, milestone: true },
             // V2.1
-            { section: 'V2.1', name: '复盘 Agent', start: '2026-10-01', days: 14 },
-            { section: 'V2.1', name: 'AI 图片', start: '2026-10-08', days: 14 },
-            { section: 'V2.1', name: '营销专家库', start: '2026-10-08', days: 21 },
-            { section: 'V2.1', name: '框架升级', start: '2026-10-15', days: 14 },
+            { section: 'V2.1', name: '复盘 Agent', start: '2026-09-24', days: 14 },
+            { section: 'V2.1', name: 'AI 图片', start: '2026-09-24', days: 14 },
+            { section: 'V2.1', name: '营销专家库', start: '2026-09-24', days: 14 },
+            { section: 'V2.1', name: '框架升级', start: '2026-09-24', days: 14 },
             { section: '里程碑', name: 'V2.1 交付', start: '2026-10-31', days: 0, milestone: true },
         ]
     }
