@@ -7,6 +7,7 @@ import DependencyGraph from './components/DependencyGraph';
 import CostView from './components/CostView';
 import PlanDesign from './components/PlanDesign';
 import PresentationMode from './components/PresentationMode';
+import Login from './components/Login';
 import { useStore } from './store';
 import './App.css';
 
@@ -22,7 +23,10 @@ const TABS = [
 export default function App() {
     const [tab, setTab] = useState('dashboard');
     const [showPresentation, setShowPresentation] = useState(false);
+    const [authed, setAuthed] = useState(() => sessionStorage.getItem('aeon-auth') === '1');
     const { exportState, importState } = useStore();
+
+    if (!authed) return <Login onLogin={() => setAuthed(true)} />;
 
     return (
         <div className="app-root">
