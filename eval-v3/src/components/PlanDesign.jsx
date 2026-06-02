@@ -189,6 +189,7 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
                             {displayTasks.reduce((s, t) => s + (t.days || 0) * (t.headcount || 1), 0) + ' \u4eba\u5929'}
                         </span>
                     </div>
+                    <div style={{ fontSize: 12, color: '#4F46E5', marginTop: 2, fontWeight: 500 }}>{plan.summary}</div>
                     <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{plan.strategy}</div>
                 </div>
                 {plan.tag && <span style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#EEF2FF', color: '#4F46E5' }}>{plan.tag}</span>}
