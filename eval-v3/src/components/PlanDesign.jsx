@@ -506,12 +506,29 @@ function PlanHeroSlide({ plan, features, onUpdateTask, onUpdateFeature, onUpdate
                                 </label>
                                 <label style={{ fontSize: 11, color: '#374151', fontWeight: 600 }}>
                                     {"\u63cf\u8ff0"}
-                                    <textarea value={cf.desc} rows={3} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, marginTop: 2, resize: 'vertical' }}
+                                    <div style={{ display: 'flex', gap: 4, marginTop: 4, marginBottom: 4, alignItems: 'center' }}>
+                                        <span style={{ fontSize: 10, color: '#9CA3AF' }}>{"\u9009\u4e2d\u6587\u5b57\u540e\u70b9\u51fb\u989c\u8272\u6807\u4eae\uff1a"}</span>
+                                        {HIGHLIGHT_COLORS.map(c => (
+                                            <button key={c} onClick={() => {
+                                                const ta = document.getElementById('cf-desc-textarea');
+                                                if (!ta) return;
+                                                const start = ta.selectionStart;
+                                                const end = ta.selectionEnd;
+                                                if (start === end) return;
+                                                const text = cf.desc;
+                                                const selected = text.slice(start, end);
+                                                const newText = text.slice(0, start) + '[[' + selected + '|' + c + ']]' + text.slice(end);
+                                                updateCoreFeature(editingFeature, 'desc', newText);
+                                            }} style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid ' + c, background: c + '25', cursor: 'pointer', flexShrink: 0 }} />
+                                        ))}
+                                        <button onClick={() => {
+                                            const cleaned = cf.desc.replace(/\[\[(.*?)\|.*?\]\]/g, '$1');
+                                            updateCoreFeature(editingFeature, 'desc', cleaned);
+                                        }} style={{ fontSize: 9, padding: '2px 6px', border: '1px solid #E5E7EB', borderRadius: 3, background: '#fff', cursor: 'pointer', color: '#9CA3AF', marginLeft: 4 }}>{"\u6e05\u9664\u6807\u8272"}</button>
+                                    </div>
+                                    <textarea id="cf-desc-textarea" value={cf.desc} rows={3} style={{ display: 'block', width: '100%', border: '1px solid #E5E7EB', borderRadius: 4, padding: '6px 8px', fontSize: 12, resize: 'vertical' }}
                                         onChange={e => updateCoreFeature(editingFeature, 'desc', e.target.value)} />
                                 </label>
-                                <div style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 10, color: '#6B7280' }}>
-                                    {"\u6807\u8272\u683c\u5f0f: [[text|#color]]  \u4f8b\u5982 [[\u5fae\u8f6f\u4ec5\u96c6\u6210|#EF4444]]"}
-                                </div>
                                 <div style={{ fontSize: 11, padding: '6px 8px', background: '#FAFAFA', borderRadius: 4, lineHeight: 1.6 }}>
                                     {"\u9884\u89c8: "}{renderHighlightedText(cf.desc)}
                                 </div>
